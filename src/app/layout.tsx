@@ -38,6 +38,10 @@ export default function RootLayout({
           attribute="class"
           defaultTheme="dark"
           enableSystem={false}
+          // A key of its own: enableSystem={false} does not coerce a "system"
+          // value left in storage by an earlier build, and such a visitor would
+          // land in light mode. A fresh key means dark really is the default.
+          storageKey="gradient-grain:theme"
           disableTransitionOnChange
         >
           <header className="sticky top-0 z-10 flex h-14 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur md:px-10">
