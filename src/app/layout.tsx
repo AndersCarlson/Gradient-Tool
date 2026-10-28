@@ -46,7 +46,6 @@ export default function RootLayout({
         >
           <header className="sticky top-0 z-10 flex h-14 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur md:px-10">
             <span className="text-sm font-semibold tracking-tight">Gradient + Grain</span>
-            <span className="text-xs text-muted-foreground">built on Monad</span>
             <div className="ml-auto">
               <ThemeToggle />
             </div>

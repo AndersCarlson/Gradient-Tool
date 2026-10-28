@@ -115,8 +115,8 @@ export const presets: Preset[] = [
     },
   },
   {
-    name: "Monad",
-    note: "Grayscale, system-native — reads as a surface, not as decoration.",
+    name: "Graphite",
+    note: "Grayscale and close to black — reads as a surface, not as decoration.",
     config: {
       gradient: gradient({ angle: 160, space: "oklab", stops: stops("#2a2a2a", "#0b0b0b") }),
       grain: { ...defaultGrain, opacity: 30, size: 22, contrast: 115 },

@@ -38,9 +38,9 @@ One caveat worth knowing: canvas only interpolates in sRGB, so an oklch gradient
 can read a shade differently in the exported PNG than it does in the browser.
 The tool says so next to the export.
 
-## Built on Monad
+## Stack
 
-The UI is the Monad design system — Next.js (App Router),
-Tailwind v4, Base UI via shadcn/ui, and `next-themes`. This repo carries only
-the slice of the kit the tool actually imports; the components in
-`src/components/ui/` are copied-in source, yours to change.
+Next.js (App Router), Tailwind v4, Base UI via shadcn/ui, and `next-themes`.
+The components in `src/components/ui/` are copied-in source rather than a
+dependency, so they are yours to change — only the handful the tool actually
+imports are here.
