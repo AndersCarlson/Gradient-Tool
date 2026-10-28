@@ -1,7 +1,16 @@
 "use client"
 
 import * as React from "react"
-import { CheckIcon, CopyIcon, DownloadIcon, PlusIcon, RotateCcwIcon, ShuffleIcon, XIcon } from "lucide-react"
+import {
+  CheckIcon,
+  CopyIcon,
+  DownloadIcon,
+  PaletteIcon,
+  PlusIcon,
+  RotateCcwIcon,
+  ShuffleIcon,
+  XIcon,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
@@ -21,7 +30,16 @@ import {
   type GradientType,
   type StudioConfig,
 } from "@/lib/gradient-grain"
-import { defaultConfig, presets, randomConfig, uid } from "@/lib/gradient-presets"
+import {
+  defaultConfig,
+  defaultMeshPalette,
+  defaultPalette,
+  meshFromStops,
+  presets,
+  randomConfig,
+  randomPalette,
+  uid,
+} from "@/lib/gradient-presets"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -46,6 +64,22 @@ const EXPORT_SIZES = ["1920 × 1080", "2560 × 1440", "1200 × 1200", "1080 × 1
 function parseSize(label: string): [number, number] {
   const [w, h] = label.split("×").map((part) => Number(part.trim()))
   return [w, h]
+}
+
+const STORAGE_KEY = "gradient-grain:config"
+
+/** Whatever the user last had open, if the browser kept it for us. */
+function loadConfig(): StudioConfig | null {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as StudioConfig
+    // Shape check, so an old or hand-edited entry can't break the page.
+    if (!parsed?.gradient?.stops?.length || !parsed?.grain) return null
+    return parsed
+  } catch {
+    return null
+  }
 }
 
 /** Base UI hands back a scalar or an array depending on thumb count. */
@@ -140,6 +174,7 @@ export function GradientGrainStudio() {
   const [exportSize, setExportSize] = React.useState<string>(EXPORT_SIZES[0])
   const [copied, setCopied] = React.useState(false)
   const [rendering, setRendering] = React.useState(false)
+  const [restored, setRestored] = React.useState(false)
 
   const { gradient, grain } = config
 
@@ -153,6 +188,23 @@ export function GradientGrainStudio() {
       setConfig((prev) => ({ ...prev, grain: { ...prev.grain, ...patch } })),
     []
   )
+
+  // Restore after mount rather than during render: the page is statically
+  // exported, so the server-rendered markup has to match the default config.
+  React.useEffect(() => {
+    const saved = loadConfig()
+    if (saved) setConfig(saved)
+    setRestored(true)
+  }, [])
+
+  React.useEffect(() => {
+    if (!restored) return
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(config))
+    } catch {
+      // Private windows and blocked site data just mean no persistence.
+    }
+  }, [config, restored])
 
   // Stops stay sorted so the multi-thumb slider maps straight onto them.
   const sortStops = (stops: StudioConfig["gradient"]["stops"]) =>
@@ -173,6 +225,46 @@ export function GradientGrainStudio() {
   const usesStops = gradient.type !== "mesh"
   const usesAngle = gradient.type === "linear" || gradient.type === "conic"
   const usesCenter = gradient.type === "radial" || gradient.type === "conic"
+
+  /** Repaint the active mode's colors in place, leaving everything else alone. */
+  function recolor(colors: string[], base?: string) {
+    if (gradient.type === "mesh") {
+      setGradient({
+        meshBase: base ?? gradient.meshBase,
+        blobs: gradient.blobs.map((blob, i) => ({
+          ...blob,
+          color: colors[i % colors.length],
+        })),
+      })
+      return
+    }
+
+    // Colors run along the ramp, so they are assigned in sorted order.
+    const order = new Map(
+      sortStops(gradient.stops).map((stop, i) => [stop.id, colors[i % colors.length]])
+    )
+    setGradient({
+      stops: gradient.stops.map((stop) => ({
+        ...stop,
+        color: order.get(stop.id) ?? stop.color,
+      })),
+    })
+  }
+
+  function randomColors() {
+    const count =
+      gradient.type === "mesh" ? gradient.blobs.length : gradient.stops.length
+    const { colors, base } = randomPalette(count)
+    recolor(colors, base)
+  }
+
+  function resetColors() {
+    if (gradient.type === "mesh") {
+      recolor(defaultMeshPalette.colors, defaultMeshPalette.base)
+      return
+    }
+    recolor(defaultPalette)
+  }
 
   async function copyCss() {
     try {
@@ -314,7 +406,14 @@ export function GradientGrainStudio() {
                   value={[gradient.type]}
                   onValueChange={(value) => {
                     const next = (value as string[])[0] as GradientType | undefined
-                    if (next) setGradient({ type: next })
+                    if (!next) return
+                    // Switching into an empty mesh would strand the palette the
+                    // user built, so the stops come across as blobs.
+                    setGradient(
+                      next === "mesh" && gradient.blobs.length === 0
+                        ? { type: next, blobs: meshFromStops(gradient.stops) }
+                        : { type: next }
+                    )
                   }}
                 >
                   {GRADIENT_TYPES.map((type) => (
@@ -586,6 +685,29 @@ export function GradientGrainStudio() {
                   </div>
                 </>
               )}
+
+              <Separator />
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={randomColors}
+                >
+                  <PaletteIcon />
+                  Random colors
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="flex-1"
+                  onClick={resetColors}
+                >
+                  <RotateCcwIcon />
+                  Reset colors
+                </Button>
+              </div>
             </TabsContent>
 
             {/* ------------------------------------------------- grain -- */}

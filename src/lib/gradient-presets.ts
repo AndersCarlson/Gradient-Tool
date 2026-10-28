@@ -6,7 +6,14 @@
  * styles the studio's own chrome still comes from tokens.
  */
 
-import { hslToHex, type GradientConfig, type GrainConfig, type StudioConfig } from "./gradient-grain"
+import {
+  hslToHex,
+  type Blob,
+  type GradientConfig,
+  type GrainConfig,
+  type Stop,
+  type StudioConfig,
+} from "./gradient-grain"
 
 export type Preset = { name: string; note: string; config: StudioConfig }
 
@@ -119,31 +126,69 @@ export const presets: Preset[] = [
 
 export const defaultConfig: StudioConfig = presets[0].config
 
-/** A pleasing-by-construction random config: one hue family, controlled spread. */
-export function randomConfig(current: StudioConfig): StudioConfig {
+/**
+ * The palettes "Reset colors" restores. They are kept apart from the presets so
+ * resetting colors leaves the gradient type, geometry, and grain exactly as the
+ * user left them — only the colors go back.
+ */
+export const defaultPalette = ["#5b4bdb", "#c84b8f", "#f2a65a"]
+export const defaultMeshPalette = {
+  base: "#0b1220",
+  colors: ["#2dd4bf", "#6366f1", "#ec4899", "#22d3ee"],
+}
+
+/**
+ * A pleasing-by-construction palette: one hue family, controlled spread, and a
+ * consistent light-to-dark direction, rather than `count` independent darts.
+ * The returned `base` suits a mesh backdrop for the same family.
+ */
+export function randomPalette(count: number): { colors: string[]; base: string } {
+  const n = Math.max(1, count)
   const hue = Math.floor(Math.random() * 360)
   const spread = 40 + Math.random() * 90
   const dark = Math.random() > 0.55
-  const pick = (i: number, n: number) =>
-    hslToHex(
-      (hue + (i / Math.max(1, n - 1)) * spread) % 360,
+
+  const colors = Array.from({ length: n }, (_, i) => {
+    const t = n === 1 ? 0 : i / (n - 1)
+    return hslToHex(
+      (hue + t * spread) % 360,
       55 + Math.random() * 35,
-      dark ? 18 + (i / Math.max(1, n - 1)) * 40 : 70 - (i / Math.max(1, n - 1)) * 35
+      dark ? 18 + t * 40 : 70 - t * 35
     )
+  })
 
-  const type = current.gradient.type
-  const count = 2 + Math.floor(Math.random() * 2)
+  return { colors, base: dark ? hslToHex(hue, 35, 10) : hslToHex(hue, 25, 92) }
+}
 
-  const blobs =
-    type === "mesh"
-      ? Array.from({ length: 4 }, (_, i) => ({
-          id: uid("blob"),
-          color: pick(i, 4),
-          x: Math.round(15 + Math.random() * 70),
-          y: Math.round(15 + Math.random() * 70),
-          size: Math.round(40 + Math.random() * 25),
-        }))
-      : current.gradient.blobs
+/**
+ * Carry a stop palette into mesh mode, so switching type never costs the user
+ * the colors they picked. Positions are spread around the box rather than
+ * stacked, which is the whole point of a mesh.
+ */
+export function meshFromStops(stops: Stop[]): Blob[] {
+  const spots: [number, number][] = [
+    [22, 26],
+    [76, 22],
+    [70, 74],
+    [26, 78],
+    [50, 48],
+    [86, 54],
+  ]
+  return stops.map((stop, i) => ({
+    id: uid("blob"),
+    color: stop.color,
+    x: spots[i % spots.length][0],
+    y: spots[i % spots.length][1],
+    size: 54,
+  }))
+}
+
+/** Randomize geometry and colors together, in whichever mode is active. */
+export function randomConfig(current: StudioConfig): StudioConfig {
+  const isMesh = current.gradient.type === "mesh"
+  const stopCount = 3 + Math.floor(Math.random() * 2)
+  const blobCount = Math.max(1, current.gradient.blobs.length || 4)
+  const { colors, base } = randomPalette(isMesh ? blobCount : stopCount)
 
   return {
     gradient: {
@@ -151,13 +196,23 @@ export function randomConfig(current: StudioConfig): StudioConfig {
       angle: Math.round(Math.random() * 360),
       centerX: Math.round(25 + Math.random() * 50),
       centerY: Math.round(25 + Math.random() * 50),
-      stops: Array.from({ length: count + 1 }, (_, i) => ({
-        id: uid("stop"),
-        color: pick(i, count + 1),
-        position: Math.round((i / count) * 100),
-      })),
-      meshBase: dark ? hslToHex(hue, 35, 10) : hslToHex(hue, 25, 92),
-      blobs,
+      meshBase: isMesh ? base : current.gradient.meshBase,
+      stops: isMesh
+        ? current.gradient.stops
+        : colors.map((color, i) => ({
+            id: uid("stop"),
+            color,
+            position: Math.round((i / (colors.length - 1)) * 100),
+          })),
+      blobs: isMesh
+        ? Array.from({ length: blobCount }, (_, i) => ({
+            id: uid("blob"),
+            color: colors[i % colors.length],
+            x: Math.round(15 + Math.random() * 70),
+            y: Math.round(15 + Math.random() * 70),
+            size: Math.round(40 + Math.random() * 25),
+          }))
+        : current.gradient.blobs,
     },
     grain: {
       ...current.grain,
